@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from torch.nn import init
 
 def conv_layer(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True):
     output = nn.Sequential(
@@ -50,7 +50,8 @@ class unet(nn.Module):
        for m in self.modules():
            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
                if m.bias is not None:
-                   m.bias.data.zero_()
+                   init.xavier_normal(m.weight)
+                   init.constant(m.bias, 0)
 
     def forward(self, x):
         conv1_out = self.conv1a(x)
@@ -58,14 +59,12 @@ class unet(nn.Module):
         conv3_out = self.conv3a(self.max_pool(conv2_out))
         conv4_out = self.conv4a(self.max_pool(conv3_out))
         conv5_out = self.conv5a(self.max_pool(conv4_out))
-
         conv5b_out = torch.cat((self.upsample5(conv5_out), conv4_out), 1)
         conv4b_out = self.conv4b(conv5b_out)
-
         conv3b_out = self.conv3b(torch.cat((self.upsample4(conv4b_out), conv3_out), 1))
-
         conv2b_out = self.conv2b(torch.cat((self.upsample3(conv3b_out), conv2_out), 1))
-        
         conv1b_out = self.conv1b(torch.cat((self.upsample2(conv2b_out), conv1_out), 1))
 
         conv0b_out = self.conv0b(conv1b_out)
+
+        return conv0b_out

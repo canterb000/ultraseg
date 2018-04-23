@@ -1,15 +1,18 @@
+import torch
 from model import unet
+from torch.autograd import Variable
+import numpy as np
 
 def main():
 
     model = unet()
 
-    test_x = Variable(torch.FloatTensor(1, 3, 1024, 1024))
-    out_x = net(test_x)
 
-    print(out_x.size())
-    
-#    print("model: {}".format(model))
+#TODO input constraint 48*
+    test_x = Variable(torch.FloatTensor(np.random.random((1, 1, 48, 48))))
+    out_x = model(test_x)
+    print(out_x)
+
 '''    
     params = 
     args = 
