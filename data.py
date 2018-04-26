@@ -22,23 +22,21 @@ class datasetbuilder(data.Dataset):
                 fori = fmask[:-9] + '.tif'
 
                 self.dataset.append([os.path.join(rootdir, fori), os.path.join(rootdir, fmask), fname])
-                if totalcount < 3:
-                    print("ori: {}, mask: {}".format(os.path.join(rootdir, fori), os.path.join(rootdir, fmask) ))
+                    #print("ori: {}, mask: {}".format(os.path.join(rootdir, fori), os.path.join(rootdir, fmask) ))
                 totalcount+=1
 
-            print("train db totalcount: {}".format(totalcount))
+#            print("train db totalcount: {}".format(totalcount))
             self.count = totalcount
 
         else:
             print("test database")
             totalcount = 0
             for fname in glob.glob(os.path.join(rootdir, '*.tif')):
-                self.dataset.append(os.path.join(rootdir, fname))
+                self.dataset.append([os.path.join(rootdir, fname), fname])
 #                print("test: {}".format(os.path.join(rootdir, fname)))
                 totalcount+=1
-            print("test db totalcount: {}".format(totalcount))
+#            print("test db totalcount: {}".format(totalcount))
             self.count = totalcount
-
 
         print("count: {}".format(self.count))
 
@@ -65,7 +63,7 @@ class datasetbuilder(data.Dataset):
             return img, gt, fname
 
         else:
-            img_path = self.dataset[idx]
+            img_path, fname = self.dataset[idx]
             img = imread(img_path)
 
             img = img[0:self.nRow, 0:self.nCol]
@@ -73,4 +71,4 @@ class datasetbuilder(data.Dataset):
             img = (img - img.min()) / (img.max() - img.min())
             img = torch.from_numpy(img).float()
 
-            return img
+            return img, fname 
