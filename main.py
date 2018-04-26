@@ -13,8 +13,7 @@ def main():
 
     dim = [400,560]
 #TODO input constraint 48*
-    test_x = Variable(torch.FloatTensor(np.random.random((1, 1, 48, 48))))
-
+    #test_x = Variable(torch.FloatTensor(np.random.random((1, 1, 48, 48))))
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--datadir', type=str, help='data dir', default='/home/ecg/Downloads/segdata')
@@ -26,6 +25,7 @@ def main():
     parser.add_argument('--checkpoint', type=str, help='output checkpoint filename', default='checkpoint.tar')
     parser.add_argument('--resume', type=str, help='resume configuration', default='checkpoint.tar')
     parser.add_argument('--start_epoch', type=int, help='init value of epoch', default='0')
+    parser.add_argument('--output_csv', type=str, help='init value of epoch', default='output.csv')
     
     args = parser.parse_args()
     print(args)
@@ -52,8 +52,6 @@ def main():
             print("=> loaded checkpoint (epoch {}, loss {})".format(checkpoint['epoch'], checkpoint['loss']) )
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-
-
 
     optimizer = optim.Adagrad(model.parameters(), lr=args.lr)
     lossfn = nn.MSELoss()
@@ -94,21 +92,68 @@ def main():
           'loss': loss.data[0] / len(train_loader)
         }, args.checkpoint)
 
-
         
     print("######QuickTest:#######")
+    if os.path.exists(args.output_csv):
+        print("remove {}".format(args.output_csv))
+        exit(-1)
+    f = open(args.output_csv, 'a+')
+    f.write("img,pixels\n")
+    f.close()
+
+    for i, (x, name) in enumerate(test_loader):
+        x = x.cuda()
+        y = model(Variable(x))
+        y = y.cpu()
+        tif_to_tensor(args.output_csv, str(i), y.data)
+
+        if i > 20:
+            break
+
+'''
     for i, (x, y, name) in enumerate(train_loader):
-        if i > train_size:
+        if i > 5630:
             x = x.cuda()
             y_pred = model(Variable(x))
             y_pred = y_pred.cpu()
             x = x.cpu()
-            save_tif(x.numpy(), name='ori_'+str(i))
             save_tif(y_pred.data.numpy(), name='pred_'+str(i))
             save_tif(y.numpy(), name='gt_'+str(i))
+            tif_to_tensor(str(i), y)
         else:
-            break
+            continue
+'''
 
+
+def tif_to_tensor(output, name, tif):
+    f = open(output, 'a+')
+    f.write(name + ',')
+
+    _, _, h, w = tif.shape
+    flag=False
+    start=-1
+    length=-1
+    #print("{} {} {} ".format(tif.shape, h, w))
+    for wi in range(w):
+        for hi in range(h):
+            val = tif.numpy()[0, 0, hi, wi]
+            pos = hi + wi*400 + 1
+            if val > 0.5:
+                if flag:
+                    length+=1
+                else:
+                    start=pos
+                    length=1
+                    flag=True
+            else:
+                if flag:
+                    #print("{},{}".format(start, length))
+                    f.write("{} {} ".format(start, length))
+                    start=-1
+                    length=-1
+                    flag=False
+    f.write("\n")
+    f.close() 
 
 def save_tif(ori, name):
     img = ori[0,0,:,:]
