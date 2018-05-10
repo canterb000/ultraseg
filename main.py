@@ -11,7 +11,7 @@ import torch.nn as nn
 
 def main():
 
-    dim = [400,560]
+    dim = [480,640]
 #TODO input constraint 48*
     #test_x = Variable(torch.FloatTensor(np.random.random((1, 1, 48, 48))))
     
@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--workersize', type=int, help='worker number', default='2')
     parser.add_argument('--cuda', help='cuda configuration', default=True)
     parser.add_argument('--lr', type=float, help='learning rate', default=0.0002)
-    parser.add_argument('--epoch', type=int, help='epoch', default=40)
+    parser.add_argument('--epoch', type=int, help='epoch', default=60)
     parser.add_argument('--checkpoint', type=str, help='output checkpoint filename', default='checkpoint.tar')
     parser.add_argument('--resume', type=str, help='resume configuration', default='checkpoint.tar')
     parser.add_argument('--start_epoch', type=int, help='init value of epoch', default='0')
@@ -38,9 +38,10 @@ def main():
     test_loader = torch.utils.data.DataLoader(testdata, batch_size=args.batchsize,
                                              num_workers=args.workersize, shuffle=False)
 
+    
     model = unet()
     if args.cuda:
-         model = model.cuda()
+        model = model.cuda()
 
     if args.resume:
         if os.path.isfile(args.resume):
@@ -61,12 +62,9 @@ def main():
 
 
     print("######Train:#######")
-    train_size = 5300
     for epoch in range(args.start_epoch, args.epoch):
         print("rangetest: epoch: {}".format(epoch))
         for i, (x, y, name) in enumerate(train_loader):
-            if i > train_size:
-                break
             x, y = Variable(x), Variable(y)
             if args.cuda:
                 x = x.cuda()
@@ -105,11 +103,8 @@ def main():
         x = x.cuda()
         y = model(Variable(x))
         y = y.cpu()
-        tif_to_tensor(args.output_csv, str(i), y.data)
-
-        if i > 20:
-            break
-
+        tif_to_tensor(args.output_csv, str(i+1), y)
+        #save_tif(y.data.numpy(), str(i+1))
 '''
     for i, (x, y, name) in enumerate(train_loader):
         if i > 5630:
@@ -128,16 +123,31 @@ def main():
 def tif_to_tensor(output, name, tif):
     f = open(output, 'a+')
     f.write(name + ',')
+   
+    #save_tif((tif.data)[0,0], name)    
+    #print("data.shape {}".format(data.shape))
+    #save_tif(np.array(img),  "resize_"+name) 
+    #print("img: {} {}".format(img, img.size))
+    #img = np.atleast_3d(data).transpose(2, 0, 1).astype(np.float32)
+    #print(img.shape)
+   #print("arrayimg: {} {}".format(img, img.shape))
 
-    _, _, h, w = tif.shape
+    imgdata= (tif.data)[0,0]
+    img = imgdata > 0.5
+    img = Image.fromarray(np.uint8(img*255), mode='L')
+    img = img.resize((580, 420), Image.ANTIALIAS)
+    img.save("pred/binary"+ name + ".tif")
+    img = np.array(img)
+    
+    h, w = img.shape
     flag=False
     start=-1
     length=-1
-    #print("{} {} {} ".format(tif.shape, h, w))
+
     for wi in range(w):
         for hi in range(h):
-            val = tif.numpy()[0, 0, hi, wi]
-            pos = hi + wi*400 + 1
+            val = img[hi, wi]
+            pos = hi + wi*420 + 1
             if val > 0.5:
                 if flag:
                     length+=1
@@ -156,7 +166,7 @@ def tif_to_tensor(output, name, tif):
     f.close() 
 
 def save_tif(ori, name):
-    img = ori[0,0,:,:]
+    img = ori[:,:]
     img = img > 0.5
     img = Image.fromarray(np.uint8(img*255), mode='L')
     filename = name + '.tif'
