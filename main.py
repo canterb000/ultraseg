@@ -18,10 +18,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--datadir', type=str, help='data dir', default='/home/ecg/Downloads/segdata')
     parser.add_argument('--batchsize', type=int, help='batch size', default='1')
-    parser.add_argument('--workersize', type=int, help='worker number', default='2')
+    parser.add_argument('--workersize', type=int, help='worker number', default='1')
     parser.add_argument('--cuda', help='cuda configuration', default=True)
-    parser.add_argument('--lr', type=float, help='learning rate', default=0.0002)
-    parser.add_argument('--epoch', type=int, help='epoch', default=60)
+    parser.add_argument('--lr', type=float, help='learning rate', default=0.005)
+    parser.add_argument('--epoch', type=int, help='epoch', default=20)
     parser.add_argument('--checkpoint', type=str, help='output checkpoint filename', default='checkpoint.tar')
     parser.add_argument('--resume', type=str, help='resume configuration', default='checkpoint.tar')
     parser.add_argument('--start_epoch', type=int, help='init value of epoch', default='0')
@@ -36,6 +36,7 @@ def main():
     train_loader = torch.utils.data.DataLoader(traindata, batch_size=args.batchsize,
                                              num_workers=args.workersize, shuffle=False)
     test_loader = torch.utils.data.DataLoader(testdata, batch_size=args.batchsize,
+    #test_loader = torch.utils.data.DataLoader(traindata, batch_size=args.batchsize,
                                              num_workers=args.workersize, shuffle=False)
 
     
@@ -99,12 +100,17 @@ def main():
     f.write("img,pixels\n")
     f.close()
 
-    for i, (x, name) in enumerate(test_loader):
-        x = x.cuda()
+    for i, (dat, name) in enumerate(test_loader):
+        x = dat.cuda()
         y = model(Variable(x))
         y = y.cpu()
+        #print(name[0])
         tif_to_tensor(args.output_csv, str(i+1), y)
-        #save_tif(y.data.numpy(), str(i+1))
+        #tif_to_tensor(args.output_csv, name[0], y)
+        #print("savetif: {}".format(type(dat.cpu().numpy())))
+        #save_tif(dat.cpu().numpy()[0,0], "dat_"+name[0])
+        #save_tif(ori.cpu().numpy()[0,0], name[0])
+
 '''
     for i, (x, y, name) in enumerate(train_loader):
         if i > 5630:
@@ -124,19 +130,11 @@ def tif_to_tensor(output, name, tif):
     f = open(output, 'a+')
     f.write(name + ',')
    
-    #save_tif((tif.data)[0,0], name)    
-    #print("data.shape {}".format(data.shape))
-    #save_tif(np.array(img),  "resize_"+name) 
-    #print("img: {} {}".format(img, img.size))
-    #img = np.atleast_3d(data).transpose(2, 0, 1).astype(np.float32)
-    #print(img.shape)
-   #print("arrayimg: {} {}".format(img, img.shape))
-
     imgdata= (tif.data)[0,0]
     img = imgdata > 0.5
     img = Image.fromarray(np.uint8(img*255), mode='L')
     img = img.resize((580, 420), Image.ANTIALIAS)
-    img.save("pred/binary"+ name + ".tif")
+    img.save("pred/"+ name + ".tif")
     img = np.array(img)
     
     h, w = img.shape
@@ -144,9 +142,12 @@ def tif_to_tensor(output, name, tif):
     start=-1
     length=-1
 
+    #print("h: {} , w: {} ".format(h, w))
+
     for wi in range(w):
         for hi in range(h):
             val = img[hi, wi]
+            #pos = hi + wi*420 
             pos = hi + wi*420 + 1
             if val > 0.5:
                 if flag:
@@ -155,10 +156,15 @@ def tif_to_tensor(output, name, tif):
                     start=pos
                     length=1
                     flag=True
+                
+                #print("{} {}   binary: {} {}".format(hi, wi, flag, length))
             else:
                 if flag:
                     #print("{},{}".format(start, length))
+                    #if int(name) < 1:
                     f.write("{} {} ".format(start, length))
+                    #f.write("{},{}---{}\t".format(hi, wi, length))
+                    
                     start=-1
                     length=-1
                     flag=False
@@ -170,7 +176,7 @@ def save_tif(ori, name):
     img = img > 0.5
     img = Image.fromarray(np.uint8(img*255), mode='L')
     filename = name + '.tif'
-    img.save('pred/'+filename) 
+    img.save('pred/ori_'+filename) 
     print("Saved: {}".format(filename))
 
 

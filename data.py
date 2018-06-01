@@ -36,16 +36,18 @@ class datasetbuilder(data.Dataset):
                     #print("ori: {}, mask: {}".format(os.path.join(rootdir, fori), os.path.join(rootdir, fmask) ))
                 totalcount+=1
 
-#            print("train db totalcount: {}".format(totalcount))
+            print("train db totalcount: {}".format(totalcount))
             self.count = totalcount
 
         else:
             print("test database")
             totalcount = 0
-            for fname in glob.glob(os.path.join(rootdir, '*.tif')):
-               fmask = os.path.basename(fname)
-               self.dataset.append([os.path.join(rootdir, fname), fmask])
-               totalcount+=1
+            for i in range(5508):
+                fmask = str(i+1)+".tif"
+                fullpath = os.path.join(rootdir, fmask)
+                self.dataset.append([fullpath, fmask])
+                #print("{} {} {}".format(i+1, fullpath, fmask))
+                totalcount += 1
             self.count = totalcount
 
         print("count: {}".format(self.count))
@@ -69,7 +71,7 @@ class datasetbuilder(data.Dataset):
 
             img = np.atleast_3d(img).transpose(2, 0, 1).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-    #        print("img {} shape {}".format(img, img.shape))
+            #print("before {}  shape {}".format(before, img.shape))
      #       testimg = Image.fromarray(img[0])
      #       testimg.save("pred/"+ fname)
 
