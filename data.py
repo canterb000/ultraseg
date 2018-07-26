@@ -29,11 +29,12 @@ class datasetbuilder(data.Dataset):
         if train:
             totalcount = 0
             for fname in glob.glob(os.path.join(rootdir, '*_mask.tif')):
+            #for fname in glob.glob(os.path.join(rootdir, '*_mask.png')):
                 fmask = os.path.basename(fname)
                 fori = fmask[:-9] + '.tif'
+                #fori = fmask[:-9] + '.png'
 
                 self.dataset.append([os.path.join(rootdir, fori), os.path.join(rootdir, fmask), fori])
-                    #print("ori: {}, mask: {}".format(os.path.join(rootdir, fori), os.path.join(rootdir, fmask) ))
                 totalcount+=1
 
             print("train db totalcount: {}".format(totalcount))
@@ -44,9 +45,9 @@ class datasetbuilder(data.Dataset):
             totalcount = 0
             for i in range(5508):
                 fmask = str(i+1)+".tif"
+                #fmask = str(i+1)+".png"
                 fullpath = os.path.join(rootdir, fmask)
                 self.dataset.append([fullpath, fmask])
-                #print("{} {} {}".format(i+1, fullpath, fmask))
                 totalcount += 1
             self.count = totalcount
 
@@ -71,44 +72,30 @@ class datasetbuilder(data.Dataset):
 
             img = np.atleast_3d(img).transpose(2, 0, 1).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-            #print("before {}  shape {}".format(before, img.shape))
-     #       testimg = Image.fromarray(img[0])
-     #       testimg.save("pred/"+ fname)
-
             img = torch.from_numpy(img).float()
-            #print("train:final {}".format(img.size))
             
 
             gt = Image.open(gt_path)
             before = gt.size
             gt = gt.resize((self.nCol, self.nRow), Image.ANTIALIAS)
-     #       print("gtresize: {}".format(gt.size))
             gt = np.array(gt)
             gt = gt[0:self.nRow, 0:self.nCol]
-      #      print("gt[]: {}".format(gt.shape))
             gt = np.atleast_3d(gt).transpose(2, 0, 1)
             gt = gt / 255.0
             gt = torch.from_numpy(gt).float()
-            #print("train:final {}".format(gt.size))
 
             
             return img, gt, fname
 
         else:
             img_path, fname = self.dataset[idx]
-            #print("fname: {}".format(fname))
             img = Image.open(img_path)
-            #img.save("pred/testori_"+fname)
             before = img.size
             imgdata = np.array(img.resize((self.nCol, self.nRow), Image.ANTIALIAS))
-            #img.save("pred/testresize_"+fname)
             img = imgdata[0:self.nRow, 0:self.nCol]
             img = np.atleast_3d(img).transpose(2, 0, 1).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
-            #print("{} {} {}".format(img, type(img), img.shape))
             img = torch.from_numpy(img).float()
-            #save_tif(np.array(img), "testresize_"+fname)
 
-           #print("testfinal:{}".format(img.size))
 
             return img, fname 

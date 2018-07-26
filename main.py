@@ -17,11 +17,12 @@ def main():
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--datadir', type=str, help='data dir', default='/home/ecg/Downloads/segdata')
+    #parser.add_argument('--datadir', type=str, help='data dir', default='/home/ecg/Public/ultraseg/ultraseg/ecgdata')
     parser.add_argument('--batchsize', type=int, help='batch size', default='1')
     parser.add_argument('--workersize', type=int, help='worker number', default='1')
     parser.add_argument('--cuda', help='cuda configuration', default=True)
-    parser.add_argument('--lr', type=float, help='learning rate', default=0.005)
-    parser.add_argument('--epoch', type=int, help='epoch', default=20)
+    parser.add_argument('--lr', type=float, help='learning rate', default=0.0001)
+    parser.add_argument('--epoch', type=int, help='epoch', default=50)
     parser.add_argument('--checkpoint', type=str, help='output checkpoint filename', default='checkpoint.tar')
     parser.add_argument('--resume', type=str, help='resume configuration', default='checkpoint.tar')
     parser.add_argument('--start_epoch', type=int, help='init value of epoch', default='0')
@@ -36,7 +37,6 @@ def main():
     train_loader = torch.utils.data.DataLoader(traindata, batch_size=args.batchsize,
                                              num_workers=args.workersize, shuffle=False)
     test_loader = torch.utils.data.DataLoader(testdata, batch_size=args.batchsize,
-    #test_loader = torch.utils.data.DataLoader(traindata, batch_size=args.batchsize,
                                              num_workers=args.workersize, shuffle=False)
 
     
