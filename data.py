@@ -28,11 +28,11 @@ class datasetbuilder(data.Dataset):
 
         if train:
             totalcount = 0
-            for fname in glob.glob(os.path.join(rootdir, '*_mask.tif')):
-            #for fname in glob.glob(os.path.join(rootdir, '*_mask.png')):
+            #for fname in glob.glob(os.path.join(rootdir, '*_mask.tif')):
+            for fname in glob.glob(os.path.join(rootdir, '*_mask.png')):
                 fmask = os.path.basename(fname)
-                fori = fmask[:-9] + '.tif'
-                #fori = fmask[:-9] + '.png'
+                #fori = fmask[:-9] + '.tif'
+                fori = fmask[:-9] + '.png'
 
                 self.dataset.append([os.path.join(rootdir, fori), os.path.join(rootdir, fmask), fori])
                 totalcount+=1
@@ -43,11 +43,15 @@ class datasetbuilder(data.Dataset):
         else:
             print("test database")
             totalcount = 0
-            for i in range(5508):
-                fmask = str(i+1)+".tif"
-                #fmask = str(i+1)+".png"
-                fullpath = os.path.join(rootdir, fmask)
-                self.dataset.append([fullpath, fmask])
+            for fname in glob.glob(os.path.join(rootdir, '*_mask.png')):
+            #for i in range(5508):
+                #fmask = str(i+1)+".tif"
+                fmask = os.path.basename(fname)
+                #fori = fmask[:-9] + '.tif'
+                fori = fmask[:-11] + '.png'
+                label = fmask[-10]
+                fullpath = os.path.join(rootdir, fori)
+                self.dataset.append([fullpath, fori, label])
                 totalcount += 1
             self.count = totalcount
 
@@ -71,7 +75,8 @@ class datasetbuilder(data.Dataset):
             img = imgdata[0:self.nRow, 0:self.nCol]
 
             img = np.atleast_3d(img).transpose(2, 0, 1).astype(np.float32)
-            img = (img - img.min()) / (img.max() - img.min())
+            if img.max() > img.min():
+                img = (img - img.min()) / (img.max() - img.min())
             img = torch.from_numpy(img).float()
             
 
@@ -88,7 +93,7 @@ class datasetbuilder(data.Dataset):
             return img, gt, fname
 
         else:
-            img_path, fname = self.dataset[idx]
+            img_path, fname, label = self.dataset[idx]
             img = Image.open(img_path)
             before = img.size
             imgdata = np.array(img.resize((self.nCol, self.nRow), Image.ANTIALIAS))
@@ -96,6 +101,4 @@ class datasetbuilder(data.Dataset):
             img = np.atleast_3d(img).transpose(2, 0, 1).astype(np.float32)
             img = (img - img.min()) / (img.max() - img.min())
             img = torch.from_numpy(img).float()
-
-
-            return img, fname 
+            return img, fname, label 
