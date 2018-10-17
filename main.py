@@ -15,10 +15,18 @@ import ntpath
 import matplotlib.pyplot as plt
 
 
-PIXEL_COUNT_TH = 300
+PIXEL_COUNT_TH = 70
+PIXEL_MIN_TH = 30
+PIXEL_WIDTH_MIN_TH = 77
+HALF_OFFSET = 180
+HALF_DETECT_WIDTH = 100
+PADDING = HALF_OFFSET - HALF_DETECT_WIDTH
+ 
+
+dim = [480,640]
+
 def main():
-    dim = [480,640]
-#TODO input constraint 48*
+#input constraint 48*
     #test_x = Variable(torch.FloatTensor(np.random.random((1, 1, 48, 48))))
     
     parser = argparse.ArgumentParser()
@@ -28,7 +36,7 @@ def main():
     parser.add_argument('--workersize', type=int, help='worker number', default='1')
     parser.add_argument('--cuda', help='cuda configuration', default=True)
     parser.add_argument('--lr', type=float, help='learning rate', default=0.0001)
-    parser.add_argument('--epoch', type=int, help='epoch', default=5)
+    parser.add_argument('--epoch', type=int, help='epoch', default=6)
     parser.add_argument('--checkpoint', type=str, help='output checkpoint filename', default='checkpoint.tar')
     parser.add_argument('--resume', type=str, help='resume configuration', default='checkpoint.tar')
     parser.add_argument('--start_epoch', type=int, help='init value of epoch', default='0')
@@ -102,7 +110,6 @@ def main():
     #Detection Process
     originfiledir="/home/ecg/Public/ecgdatabase/mitdb"
 
-    HALF_OFFSET = 300
     FREQ = 360
     txt_files_pattern = Match(filetype = 'f', name = '*.dat')
     found_files = find_files(path=originfiledir, match=txt_files_pattern)
@@ -117,13 +124,16 @@ def main():
         sampfrom = 0
         sampto = sampfrom + 2 * HALF_OFFSET
         record = wfdb.rdsamp(readdir,  sampfrom = sampfrom)
+        annotation = wfdb.rdann(readdir, 'atr')
+        totalann = len(annotation.annsamp)
+        i = 0
+
         recordlength = len(record.p_signals)
+        testcount = 0
         while sampto < recordlength:
+            print("from: {}".format(sampfrom))
             record = wfdb.rdsamp(readdir, sampfrom = sampfrom, sampto = sampto)
-            
-            sampfrom +=  HALF_OFFSET
-            sampto +=  HALF_OFFSET
-            
+           
             #####detect qrs. and R-peak loc and drop R if qrs is in the next window
             p_signal = record.p_signals[:, 0]
             freq = record.fs
@@ -133,7 +143,8 @@ def main():
             plt.ylim(-2, 2.5)
             signalpath = 'snapshot.png'
             plt.savefig(signalpath)
-
+            plt.close('all')          
+ 
             img = Image.open(signalpath).convert('L')
 
             img = img.resize((dim[1], dim[0]), Image.ANTIALIAS)
@@ -148,55 +159,83 @@ def main():
             img = torch.from_numpy(img).float()
             x = img.cuda(1)
             
-            print("img: {}, \n x:{}".format(img, x))
+            #print("img: {}, \n x:{}".format(img, x))
             y = model(Variable(x))
             y = y.cpu().data.numpy()[0,0]
             labelflag = str(x) 
             res, start, end = qrs_classify(y, labelflag)
-            img = img[0,0]
+            #print("y {} {}".format(y, y.shape))
+            img = y
             img = img > 0.5
             img = np.array(img)
-            print("img: {} shape {} ".format(img, img.shape))
+            #print("img : {}".format(img))
             h, w = img.shape
             start = -1
             end = -1
-            trailcount = 5
+            trailcount = 8
             flag = False
-            for wi in range(w):
+            for wi in range(100, dim[1]-185):
                 pixelsum = 0
                 for hi in range(h):
                     val = img[hi, wi]
                     pixelsum += val
                     if pixelsum > PIXEL_COUNT_TH:
                         break
-                if pixelsum < 50:
-                    trailcount -= 1
-                    if trailcount < 0: 
-                        trailcount = 5
-                        print("{} - {}".format(start, end))
-                        start = end
-                        end = -1
+                if pixelsum > PIXEL_COUNT_TH:
+                    if not flag:
+                        flag = True          
+                        start = wi
+                        trailcount = 8
+                    else:
+                        if wi == dim[1]-185-1:
+                            end = wi
+                            report_qrs(start, end, i, x, y)
+                elif pixelsum < PIXEL_COUNT_TH and pixelsum > PIXEL_MIN_TH:
+                    if flag:
+                        trailcount -= 1
+                        if trailcount < 0:
+                            flag = False
+                            end = wi
+                            if (end - start) >  PIXEL_WIDTH_MIN_TH :
+                                detect_peak = (start+end)/2
+                                real_peak = ((detect_peak - 100)/(dim[1]-185))*HALF_OFFSET*2
+                                print("{}, {}, {}".format(start, end, real_peak))
+                                if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
+                                    print("DETECTED:  {}".format(round(real_peak+sampfrom)))
+                                    save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
+                                    ann_count(annotation, i)
+                                    i += 1
+                else:
+                    if flag:
                         flag = False
-                if flag and start > 0 and pixelsum > PIXEL_COUNT_TH:
-                    end = wi
-                    trailcount = 5
-                if (not flag) and pixelsum > PIXEL_COUNT_TH:
-                    start = wi
-                    flag = True
-       
-            
-    
-            
-
-
-            print("res: {}".format(res))
-            save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
+                        end = wi  
+                        if (end - start) >  PIXEL_WIDTH_MIN_TH:
+                            detect_peak = (start+end)/2
+                            real_peak = ((detect_peak - 100)/(dim[1]-185))*HALF_OFFSET*2
+                            print("{}, {}, {}".format(start, end, real_peak)) 
+                            if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
+                                print("DETECTED:  {}".format(round(real_peak+sampfrom)))
+                                save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
+                                ann_count(annotation, i)
+                                i += 1 
+                    else:
+                        #pass
+                        save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
+                if sampfrom == 2400:
+                    print("{}, {}, {}, {}".format(start, end, flag, trailcount))
+              
+            sampfrom += HALF_DETECT_WIDTH * 2
+            sampto +=  HALF_DETECT_WIDTH * 2
  
-            sys.exit()
+            #print("res: {}".format(res))
+            if testcount > 100: 
+                
+                sys.exit()
+            testcount += 1
             #####locate the qrs width and output qrs png. later for classification.  store in the seires.  
             #####calculate heart rate; heart rate anomaly detection
             #####
-          
+           
             
            
     ###############################   
@@ -211,7 +250,7 @@ def main():
             labelflag = False
             #print("label check: {}, {}".format(label, labelflag))
         x = dat.cuda(1)
-        print("dat {}, \n x {}".format(dat, x))
+        #print("dat {}, \n x {}".format(dat, x))
 
         #if torch.cuda.is_available():
         y = model(Variable(x))
@@ -241,6 +280,19 @@ def main():
         else:
             continue
 '''
+
+def report_qrs(start, end, i, x, y):
+    if (end - start) >  PIXEL_WIDTH_MIN_TH:
+        detect_peak = (start+end) / 2
+        real_peak = ((detect_peak - 100) / (dim[1] - 185)) * HALF_OFFSET * 2
+        print("{}, {}, {}".format(start, end, real_peak))
+        if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
+            print("DETECTED:  {}".format(round(real_peak+sampfrom)))
+            save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
+            ann_count(annotation, i)
+            i += 1
+ 
+
 def qrs_classify(ori, truth):
     img = ori[:,:]
     img = img > 0.5
@@ -265,7 +317,7 @@ def qrs_classify(ori, truth):
     if truth == flag:
         return 1, start, end
     else:
-        print("flag: {} , truth: {}".format(flag, truth))
+        #print("flag: {} , truth: {}".format(flag, truth))
         return 0, start, end
 
 
@@ -287,7 +339,7 @@ def save_tif(pred, ori, name, labelflag, start, end):
         label = '1'
     img.save('testoutput/' + label + '_' + filename + '_' + str(start) + '_' + str(end) + '.png') 
     img_y.save('testoutput/' + label + '_' + filename + '_mask_' + str(start) + '_' + str(end) + '.png') 
-    print("Saved: {}".format(filename))
+    #print("\tSaved: {}".format(filename))
 
 
 def save_checkpoint(state, filename):
@@ -337,6 +389,14 @@ def tif_to_tensor(output, name, tif):
                     flag=False
     f.write("\n")
     f.close() 
+
+
+def ann_count(annotation, i):
+    loc = annotation.annsamp[i]
+    sym = annotation.anntype[i]
+    aux = annotation.aux[i]
+    print("\tANN: {}, sym: {}, aux:{}  total:{}".format(loc, sym, aux, i))
+
 
 
 
