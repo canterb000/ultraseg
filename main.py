@@ -24,6 +24,13 @@ PADDING = HALF_OFFSET - HALF_DETECT_WIDTH
  
 
 dim = [480,640]
+signaldim = [100, 555]
+
+#Detection Process
+originfiledir="/home/ecg/Public/ecgdatabase/mitdb"
+
+FREQ = 360
+ 
 
 def main():
 #input constraint 48*
@@ -107,10 +114,6 @@ def main():
 
 
 
-    #Detection Process
-    originfiledir="/home/ecg/Public/ecgdatabase/mitdb"
-
-    FREQ = 360
     txt_files_pattern = Match(filetype = 'f', name = '*.dat')
     found_files = find_files(path=originfiledir, match=txt_files_pattern)
     
@@ -127,6 +130,7 @@ def main():
         annotation = wfdb.rdann(readdir, 'atr')
         totalann = len(annotation.annsamp)
         i = 0
+        lastpeakpos = -1
 
         recordlength = len(record.p_signals)
         testcount = 0
@@ -174,7 +178,8 @@ def main():
             end = -1
             trailcount = 8
             flag = False
-            for wi in range(100, dim[1]-185):
+            #for wi in range(100, dim[1]-185):
+            for wi in range(signaldim[0], signaldim[1]):
                 pixelsum = 0
                 for hi in range(h):
                     val = img[hi, wi]
@@ -187,41 +192,27 @@ def main():
                         start = wi
                         trailcount = 8
                     else:
-                        if wi == dim[1]-185-1:
+                        if wi == signaldim[1]:
                             end = wi
-                            report_qrs(start, end, i, x, y)
+                            i, lastpeakpos = report_qrs(start, end, i, x, y, sampfrom, labelflag, annotation, lastpeakpos)
                 elif pixelsum < PIXEL_COUNT_TH and pixelsum > PIXEL_MIN_TH:
                     if flag:
                         trailcount -= 1
                         if trailcount < 0:
                             flag = False
                             end = wi
-                            if (end - start) >  PIXEL_WIDTH_MIN_TH :
-                                detect_peak = (start+end)/2
-                                real_peak = ((detect_peak - 100)/(dim[1]-185))*HALF_OFFSET*2
-                                print("{}, {}, {}".format(start, end, real_peak))
-                                if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
-                                    print("DETECTED:  {}".format(round(real_peak+sampfrom)))
-                                    save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
-                                    ann_count(annotation, i)
-                                    i += 1
+                            i, lastpeakpos = report_qrs(start, end, i, x, y, sampfrom, labelflag, annotation, lastpeakpos)
+ 
                 else:
                     if flag:
                         flag = False
-                        end = wi  
-                        if (end - start) >  PIXEL_WIDTH_MIN_TH:
-                            detect_peak = (start+end)/2
-                            real_peak = ((detect_peak - 100)/(dim[1]-185))*HALF_OFFSET*2
-                            print("{}, {}, {}".format(start, end, real_peak)) 
-                            if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
-                                print("DETECTED:  {}".format(round(real_peak+sampfrom)))
-                                save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
-                                ann_count(annotation, i)
-                                i += 1 
+                        end = wi
+                        i, lastpeakpos = report_qrs(start, end, i, x, y, sampfrom, labelflag, annotation, lastpeakpos)
+ 
                     else:
-                        #pass
-                        save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
-                if sampfrom == 2400:
+                        pass
+                        save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, signaldim[0], signaldim[1])
+                if sampfrom == -4200:
                     print("{}, {}, {}, {}".format(start, end, flag, trailcount))
               
             sampfrom += HALF_DETECT_WIDTH * 2
@@ -281,17 +272,24 @@ def main():
             continue
 '''
 
-def report_qrs(start, end, i, x, y):
+def report_qrs(start, end, i, x, y, sampfrom, labelflag, annotation, lastpeakpos):
     if (end - start) >  PIXEL_WIDTH_MIN_TH:
         detect_peak = (start+end) / 2
-        real_peak = ((detect_peak - 100) / (dim[1] - 185)) * HALF_OFFSET * 2
-        print("{}, {}, {}".format(start, end, real_peak))
-        if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
+        real_peak = ((detect_peak - signaldim[0]) / (signaldim[1] - signaldim[0])) * HALF_OFFSET * 2
+    #    print("{}, {}, {}".format(start, end, real_peak))
+        #if real_peak >= PADDING and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
+        if real_peak >= PADDING - 20  and real_peak < PADDING + HALF_DETECT_WIDTH * 2: 
             print("DETECTED:  {}".format(round(real_peak+sampfrom)))
             save_tif(y, x.cpu().numpy()[0,0], str(sampfrom), labelflag, start, end)
-            ann_count(annotation, i)
-            i += 1
- 
+            if real_peak+sampfrom - lastpeakpos > (FREQ / 8):
+                ann_count(annotation, i)
+                i += 1
+            else:
+                print("*************repeated detection*************")
+            
+            lastpeakpos = real_peak+sampfrom 
+    return i, lastpeakpos
+
 
 def qrs_classify(ori, truth):
     img = ori[:,:]
